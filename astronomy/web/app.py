@@ -12,6 +12,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from astronomy.api.exceptions import (
@@ -38,6 +39,9 @@ app = FastAPI(
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MOON_MODEL_PATH = PROJECT_ROOT / "moon_small.glb"
 MOON_VIEWER_PATH = Path(__file__).with_name("moon_viewer.html")
+VENDOR_PATH = Path(__file__).with_name("vendor")
+
+app.mount("/vendor", StaticFiles(directory=VENDOR_PATH), name="viewer-vendor")
 
 
 @app.get("/moon", include_in_schema=False)
