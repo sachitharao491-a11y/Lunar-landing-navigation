@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lunar coordinate viewer</title>
+  <style>
+    :root { color-scheme: dark; font: 15px system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #10131a; color: #edf1f7; }
+    main { display: grid; grid-template-columns: minmax(300px, 370px) 1fr; min-height: 100vh; }
+    aside { padding: 24px; background: #191e28; overflow: auto; }
+    h1 { margin: 0 0 10px; font-size: 1.35rem; }
+    p { color: #bdc7d7; line-height: 1.5; }
+    label { display: block; margin: 18px 0 6px; color: #d5deeb; }
+    input { width: 100%; padding: 11px; border: 1px solid #495466; border-radius: 7px; color: white; background: #10151e; font: inherit; }
+    button { margin-top: 18px; padding: 11px 16px; border: 0; border-radius: 7px; color: #10131a; background: #8dd8ff; font: 600 15px system-ui; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #readout { margin-top: 15px; color: #8dd8ff; }
+    .body-card { margin-top: 12px; padding: 13px; border: 1px solid #364152; border-radius: 9px; background: #121720; }
+    .body-card h2 { display: flex; align-items: center; justify-content: space-between; margin: 0 0 9px; font-size: 1rem; }
+    .body-card p { margin: 5px 0; font-size: .9rem; }
+    .energy-card { margin-top: 12px; padding: 13px; border: 1px solid #68552b; border-radius: 9px; background: #211d14; }
+    .energy-card h2 { margin: 0 0 8px; font-size: 1rem; }
+    .energy-card p { margin: 5px 0; font-size: .9rem; }
+    .sun-dot, .earth-dot { display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 50%; background: #ffca58; }
+    .earth-dot { background: #69c7ff; }
+    .badge { font-size: .76rem; font-weight: 600; }
+    .above { color: #75e1a0; } .below { color: #ff9b91; } .unknown { color: #a9b5c5; }
+    #note { font-size: .86rem; color: #9eacbf; }
+    #view { position: relative; min-height: 100vh; overflow: hidden; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #status { position: absolute; inset: 16px 16px auto; color: #d5deeb; pointer-events: none; }
+    @media (max-width: 700px) { main { grid-template-columns: 1fr; } #view { min-height: 60vh; } }
+  </style>
+</head>
+<body>
+<main>
+  <aside>
+    <h1>Lunar coordinate viewer</h1>
+    <p>Set a lunar site and UTC time. The red marker shows the site; Sun and Earth rays use their local azimuth and elevation. Drag to rotate and scroll to zoom.</p>
+    <form id="coordinates">
+      <label for="lat">Latitude (degrees; north positive)</label>
+      <input id="lat" name="lat" type="number" min="-90" max="90" step="any" required>
+      <label for="lon">Longitude (degrees; east positive)</label>
+      <input id="lon" name="lon" type="number" min="-180" max="360" step="any" required>
+      <label for="date">Observation time (UTC)</label>
+      <input id="date" name="date" type="datetime-local" step="60" required>
+      <button id="submit" type="submit">Show position and sky</button>
+    </form>
+    <div id="readout" aria-live="polite"></div>
+    <div id="results" aria-live="polite"></div>
+    <p id="note">Model mapping: 0° longitude is placed on the model’s +Z meridian; east longitude rotates toward +X. The GLB does not include a verified lunar prime-meridian orientation, so this shows the coordinate mapping on the sphere, not a certified geographic overlay.</p>
+  </aside>
+  <section id="view" aria-label="Interactive Moon model">
+    <div id="status">Loading Moon model…</div>
+  </section>
+</main>
+<script type="importmap">
+  { "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  } }
+</script>
+<script type="module">
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+  const host = document.querySelector('#view');
+  const status = document.querySelector('#status');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#10131a');
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 100);
+  camera.position.set(0, 0.2, 4.5);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  host.appendChild(renderer.domElement);
+  scene.add(new THREE.HemisphereLight(0xddeaff, 0x34313b, 2.0));
+  const key = new THREE.DirectionalLight(0xffffff, 2.3);
+  key.position.set(3, 2, 4);
+  scene.add(key);
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.minDistance = 1.7;
+  controls.maxDistance = 9;
+
+  let moonRadius = 1.27;
+  let moonLoaded = false;
+  let siteNormal = new THREE.Vector3(0, -1, 0);
+  let bodyArrows = [];
+  const marker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.025, 20, 16),
+    new THREE.MeshBasicMaterial({ color: 0xff493d, depthTest: false })
+  );
+  marker.visible = false;
+  marker.renderOrder = 10;
+  scene.add(marker);
+
+  function localFrame(lat, lon) {
+    const phi = THREE.MathUtils.degToRad(lat);
+    const lambda = THREE.MathUtils.degToRad(lon);
+    // +Y is north; +Z is 0° longitude; east longitude advances toward +X.
+    const normal = new THREE.Vector3(Math.cos(phi) * Math.sin(lambda), Math.sin(phi), Math.cos(phi) * Math.cos(lambda)).normalize();
+    const east = new THREE.Vector3(Math.cos(lambda), 0, -Math.sin(lambda)).normalize();
+    const north = new THREE.Vector3(-Math.sin(phi) * Math.sin(lambda), Math.cos(phi), -Math.sin(phi) * Math.cos(lambda)).normalize();
+    return { normal, east, north };
+  }
+
+  function setPosition(lat, lon, recenter = true) {
+    const frame = localFrame(lat, lon);
+    siteNormal = frame.normal;
+    marker.visible = true;
+    marker.position.copy(siteNormal).multiplyScalar(moonRadius * 1.015);
+    document.querySelector('#readout').textContent = `Site marker: ${lat.toFixed(4)}° latitude, ${lon.toFixed(4)}° east longitude`;
+    if (moonLoaded && recenter) {
+      camera.position.copy(siteNormal).multiplyScalar(moonRadius * 3.5);
+      camera.up.copy(frame.north);
+      camera.lookAt(0, 0, 0);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+    return frame;
+  }
+
+  function drawBodyDirection(body, color, frame) {
+    if (body.elevation_deg == null || body.azimuth_deg == null || body.elevation_deg <= 0) return;
+    const az = THREE.MathUtils.degToRad(body.azimuth_deg);
+    const el = THREE.MathUtils.degToRad(body.elevation_deg);
+    const horizontal = frame.north.clone().multiplyScalar(Math.cos(az)).add(frame.east.clone().multiplyScalar(Math.sin(az)));
+    const direction = horizontal.multiplyScalar(Math.cos(el)).add(frame.normal.clone().multiplyScalar(Math.sin(el))).normalize();
+    const start = frame.normal.clone().multiplyScalar(moonRadius * 1.045);
+    const arrow = new THREE.ArrowHelper(direction, start, moonRadius * 0.62, color, moonRadius * 0.09, moonRadius * 0.045);
+    scene.add(arrow);
+    bodyArrows.push(arrow);
+  }
+
+  function renderResults(data) {
+    document.querySelector('#results').innerHTML = '';
+    const frame = localFrame(data.site.latitude_deg, data.site.longitude_deg_east);
+    for (const [key, title, colorClass, color] of [
+      ['sun', 'Sun', 'sun-dot', 0xffca58], ['earth', 'Earth', 'earth-dot', 0x69c7ff]
+    ]) {
+      const body = data[key];
+      const visible = key === 'earth'
+        ? data.earth_visibility.earth_center_above_geometric_horizon
+        : data.solar_irradiance.sun_center_above_geometric_horizon;
+      const badgeClass = visible === true ? 'above' : visible === false ? 'below' : 'unknown';
+      const badgeText = visible === true ? 'Directly visible' : visible === false ? 'Not visible' : 'Unknown';
+      const card = document.createElement('section');
+      card.className = 'body-card';
+      card.innerHTML = `<h2><span><i class="${colorClass}"></i>${title}</span><span class="badge ${badgeClass}">${badgeText}</span></h2>
+        <p>Azimuth: <strong>${body.azimuth_deg == null ? 'Unavailable' : `${Number(body.azimuth_deg).toFixed(2)}°`}</strong> <span class="unknown">(0° north, clockwise)</span></p>
+        <p>Elevation: <strong>${body.elevation_deg == null ? 'Unavailable' : `${Number(body.elevation_deg).toFixed(2)}°`}</strong></p>
+        ${key === 'earth' ? `<p>Geometric line of sight: <strong class="${data.earth_visibility.geometric_line_of_sight === true ? 'above' : data.earth_visibility.geometric_line_of_sight === false ? 'below' : 'unknown'}">${data.earth_visibility.geometric_line_of_sight === true ? 'Available' : data.earth_visibility.geometric_line_of_sight === false ? 'Blocked by lunar horizon' : 'Unknown'}</strong></p><p>Radio link: <strong class="unknown">Not assessed</strong></p><p class="unknown">${data.earth_visibility.radio_link_note}</p>` : ''}`;
+      document.querySelector('#results').appendChild(card);
+      drawBodyDirection(body, color, frame);
+    }
+    const irradiance = data.solar_irradiance;
+    const energy = document.createElement('section');
+    energy.className = 'energy-card';
+    energy.innerHTML = `<h2>Sunlight at this site</h2>
+      <p>Direct normal irradiance: <strong>${irradiance.direct_normal_w_m2 == null ? 'Unavailable' : `${Number(irradiance.direct_normal_w_m2).toFixed(1)} W/m²`}</strong></p>
+      <p>Horizontal surface irradiance: <strong>${irradiance.horizontal_surface_w_m2 == null ? 'Unavailable' : `${Number(irradiance.horizontal_surface_w_m2).toFixed(1)} W/m²`}</strong></p>
+      <p class="unknown">${irradiance.method} ${irradiance.limitations} Reference: <a href="${irradiance.reference_source_url}" target="_blank" rel="noreferrer">${irradiance.reference_source}</a></p>`;
+    document.querySelector('#results').appendChild(energy);
+    document.querySelector('#results').insertAdjacentHTML('beforeend', `<p class="unknown">Horizons observation (UTC): ${data.datetime_utc}; arrows are shown only when above the geometric horizon.</p>`);
+  }
+
+  async function fetchObservation(lat, lon, dateValue) {
+    const button = document.querySelector('#submit');
+    button.disabled = true;
+    document.querySelector('#results').innerHTML = '<p class="unknown">Requesting Sun and Earth positions from JPL Horizons…</p>';
+    for (const arrow of bodyArrows) scene.remove(arrow);
+    bodyArrows = [];
+    try {
+      const response = await fetch('/v1/observation', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site_name: 'Selected lunar site', latitude_deg: lat, longitude_deg_east: lon, altitude_km: 0, datetime_utc: new Date(`${dateValue}:00Z`).toISOString() })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || `Request failed (${response.status})`);
+      renderResults(data);
+    } catch (error) {
+      document.querySelector('#results').innerHTML = `<p class="below">Could not retrieve ephemeris: ${String(error.message || error).replaceAll('<', '&lt;')}</p><p class="unknown">Check that the server is running and can reach JPL Horizons.</p>`;
+    } finally { button.disabled = false; }
+  }
+
+  new GLTFLoader().load('/moon_small.glb', (gltf) => {
+    const moon = gltf.scene;
+    scene.add(moon);
+    moon.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(moon);
+    moonRadius = Math.max(bounds.getSize(new THREE.Vector3()).x, bounds.getSize(new THREE.Vector3()).y, bounds.getSize(new THREE.Vector3()).z) / 2;
+    const center = bounds.getCenter(new THREE.Vector3());
+    moon.position.sub(center);
+    controls.target.set(0, 0, 0);
+    moonLoaded = true;
+    status.textContent = 'Moon model loaded';
+  }, undefined, (error) => {
+    status.textContent = `Could not load Moon model: ${error.message || error}`;
+  });
+
+  document.querySelector('#coordinates').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const lat = Number(document.querySelector('#lat').value);
+    const lon = Number(document.querySelector('#lon').value);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 360) return;
+    setPosition(lat, lon);
+    fetchObservation(lat, lon, document.querySelector('#date').value);
+  });
+
+  document.querySelector('#date').value = new Date().toISOString().slice(0, 16);
+
+  function resize() {
+    const width = host.clientWidth;
+    const height = host.clientHeight;
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(host);
+  resize();
+  renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
