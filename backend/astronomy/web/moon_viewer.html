@@ -72,8 +72,8 @@
 </main>
 <script type="importmap">
   { "imports": {
-    "three": "/vendor/three.module.js",
-    "three/addons/": "/vendor/"
+    "three": "vendor/three.module.js",
+    "three/addons/": "vendor/"
   } }
 </script>
 <script>
@@ -206,7 +206,7 @@
     for (const arrow of bodyArrows) scene.remove(arrow);
     bodyArrows = [];
     try {
-      const response = await fetch('/v1/observation', {
+      const response = await fetch('v1/observation', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ site_name: 'Selected lunar site', latitude_deg: lat, longitude_deg_east: lon, altitude_km: 0, datetime_utc: new Date(`${dateValue}:00Z`).toISOString() })
       });
@@ -218,7 +218,7 @@
     } finally { button.disabled = false; }
   }
 
-  new GLTFLoader().load('/moon_small.glb', (gltf) => {
+  new GLTFLoader().load('moon_small.glb', (gltf) => {
     const moon = gltf.scene;
     moon.traverse((object) => {
       if (object.isMesh) {
@@ -274,7 +274,7 @@
     for (const arrow of bodyArrows) scene.remove(arrow);
     bodyArrows = [];
     try {
-      const response = await fetch('/v1/observations/batch', {
+      const response = await fetch('v1/observations/batch', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ observations: [
           { site_name: 'Site A', latitude_deg: latA, longitude_deg_east: lonA, altitude_km: 0, datetime_utc: new Date(`${dateValue}:00Z`).toISOString() },

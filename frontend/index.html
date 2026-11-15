@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Lunar Moon Navigator</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <nav id="nav" aria-label="Main">
+        <b class="logo">🌙 Lunar Moon Navigator</b>
+      </nav>
+      <main>
+        <div id="stage">
+          <canvas
+            id="cv"
+            role="img"
+            aria-label="Interactive 3D Moon. Drag to rotate, scroll to zoom."
+          ></canvas>
+          <div class="ov tl">
+            <input
+              id="q"
+              list="dl"
+              placeholder="Search name or “lat, lon”"
+              aria-label="Search lunar locations"
+            /><datalist id="dl"></datalist>
+          </div>
+          <div class="ov lay">
+            <label><input type="checkbox" id="Lsites" checked /> Sites</label
+            ><label><input type="checkbox" id="Lpsr" checked /> PSR zones</label
+            ><label><input type="checkbox" id="Lgrid" /> Graticule</label
+            ><label><input type="checkbox" id="Lroute" checked /> Route</label>
+          </div>
+          <div class="ov br">
+            Drag: rotate · Scroll/pinch: zoom · Click: select
+          </div>
+          <div
+            class="ov"
+            id="moon-model-status"
+            style="right: 8px; bottom: 8px; left: auto"
+            aria-live="polite"
+          >
+            Loading NASA LRO 3D model…
+          </div>
+        </div>
+        <div class="pn mu" id="status" aria-live="polite"></div>
+      </main>
+      <aside>
+        <div class="pn" id="acct" hidden></div>
+        <div class="pn" id="info"></div>
+        <section class="v pn" id="v-dash">
+          <h2>Mission dashboard</h2>
+          <div id="dash"></div>
+        </section>
+        <section class="v pn" id="v-explore">
+          <h2>3D Moon explorer</h2>
+          <p class="mu">All sample locations. ★ marks favorites.</p>
+          <div class="list" id="sitelist"></div>
+        </section>
+        <section class="v pn" id="v-south">
+          <h2>Lunar south pole</h2>
+          <p class="mu">
+            Cyan discs on the globe are approximate PSR zones (permanently
+            shadowed regions). Each ice indicator carries its evidence class.
+          </p>
+          <div class="row">
+            <button class="pri" data-a="pole">Fly to the pole</button>
+          </div>
+          <div id="south"></div>
+        </section>
+        <section class="v pn" id="v-analysis">
+          <h2>Landing site analysis</h2>
+          <p class="mu">
+            Weights (0–10). Scores are a simulated educational model,
+            <b>not an official NASA recommendation</b>.
+          </p>
+          <div id="wts"></div>
+          <div id="rank"></div>
+          <div class="tbl" id="cmp"></div>
+        </section>
+        <section class="v pn" id="v-terrain">
+          <h2>Terrain &amp; mission analysis</h2>
+          <div id="t-note" class="mu"></div>
+          <div class="row">
+            <label
+              >Site
+              <select id="t-site"></select></label
+            ><label
+              ><input type="checkbox" id="t-auto" checked /> auto-select
+              flattest footprint</label
+            >
+          </div>
+          <div class="row">
+            <label
+              >Footprint radius m
+              <input
+                type="number"
+                id="t-rad"
+                value="15"
+                min="1"
+                max="200" /></label
+            ><label
+              >Max slope °
+              <input
+                type="number"
+                id="t-slope"
+                value="10"
+                min="1"
+                max="45"
+                step=".5" /></label
+            ><label
+              >Max relief m
+              <input type="number" id="t-relief" value="2" min=".1" step=".1"
+            /></label>
+          </div>
+          <div class="row">
+            <label>Start (UTC) <input type="date" id="t-start" /></label
+            ><label
+              >Days
+              <input
+                type="number"
+                id="t-days"
+                value="30"
+                min="1"
+                max="180" /></label
+            ><label
+              >Step min
+              <input type="number" id="t-step" value="30" min="1" /></label
+            ><label
+              >Monte Carlo runs
+              <input type="number" id="t-mc" value="20" min="0" max="100"
+            /></label>
+          </div>
+          <div class="row">
+            <label
+              >Sun/Earth source
+              <select id="t-eph">
+                <option value="horizons">JPL Horizons (live, Member 1)</option>
+                <option value="synthetic_test">
+                  Synthetic test tracks (demo)
+                </option>
+                <option value="none">None (terrain only)</option>
+              </select></label
+            >
+          </div>
+          <div class="row">
+            <button class="pri" data-a="tan">Run analysis</button
+            ><button data-a="trank">Rank polar sites</button>
+          </div>
+          <p class="mu">
+            Criteria above are demo values, not lander requirements. Results are
+            a research prototype, not a certified safety assessment.
+          </p>
+          <div id="t-out"></div>
+        </section>
+        <section class="v pn" id="v-astronomy">
+          <h2>Lunar astronomy</h2>
+          <p class="mu">Explore the Sun and Earth from a lunar site, view the interactive Moon model, and compare two locations at the same UTC time.</p>
+          <iframe
+            class="astronomy-frame"
+            src="/api/astronomy/moon"
+            title="Lunar astronomy viewer and site comparison"
+            loading="lazy"
+          ></iframe>
+        </section>
+        <section class="v pn" id="v-plan">
+          <h2>Mission planner</h2>
+          <p class="mu">
+            1) Set a landing site (select a site, then “Set as landing site”).
+            2) Turn on click mode and click the Moon to add waypoints.
+          </p>
+          <div class="row">
+            <button id="pmode" data-a="pmode">Click-to-add: off</button
+            ><button data-a="rover" class="pri">▶ Run rover</button
+            ><button data-a="clr">Clear route</button>
+          </div>
+          <div class="row">
+            <label
+              >Speed km/h
+              <input
+                type="number"
+                id="pl-speed"
+                value="1"
+                min=".1"
+                step=".1" /></label
+            ><label
+              >Op. h/day
+              <input
+                type="number"
+                id="pl-hrs"
+                value="8"
+                min="1"
+                max="24" /></label
+            ><label
+              >Margin %
+              <input type="number" id="pl-margin" value="20" min="0" /></label
+            ><label
+              >Hours/stop <input type="number" id="pl-stop" value="4" min="0"
+            /></label>
+          </div>
+          <div id="plan"></div>
+          <div class="row">
+            <input
+              id="pl-name"
+              placeholder="Plan name"
+              aria-label="Plan name"
+            /><button data-a="save">Save plan</button
+            ><button data-a="report">Generate report</button>
+          </div>
+          <textarea
+            id="rep"
+            hidden
+            readonly
+            aria-label="Mission report"
+          ></textarea
+          ><button id="cp" data-a="copy" hidden>Copy report</button>
+          <h3 style="margin-top: 10px">Saved plans</h3>
+          <div id="saved"></div>
+        </section>
+        <section class="v pn" id="v-data">
+          <h2>Scientific data &amp; resources</h2>
+          <div class="tbl" id="ds"></div>
+          <div class="row">
+            <button data-a="api" class="pri">Check NASA image search</button>
+          </div>
+          <div id="apistat" class="mu"></div>
+          <p class="mu">
+            <span class="bd observed">observed</span> measured by a mission ·
+            <span class="bd modeled">modeled</span> derived from models of
+            observations ·
+            <span class="bd hypothetical">hypothetical</span> predicted,
+            unconfirmed.
+          </p>
+        </section>
+        <section class="v pn" id="v-about">
+          <h2>About</h2>
+          <p>
+            Lunar Moon Navigator is an educational demo for exploring lunar
+            sites, comparing landing candidates and sketching rover routes.
+          </p>
+          <p class="mu">
+            The interactive globe uses NASA Goddard's LRO imagery and topography
+            model. Site values remain illustrative samples, not live NASA
+            recommendations. Model:
+            <a
+              href="https://svs.gsfc.nasa.gov/14959/"
+              target="_blank"
+              rel="noopener"
+              >NASA SVS Moon 3D Models</a
+            >. When served by the FastAPI backend, sites come from PostGIS and
+            accounts sync favorites and plans. Distances use a sphere of radius
+            1,737.4 km.
+          </p>
+        </section>
+      </aside>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

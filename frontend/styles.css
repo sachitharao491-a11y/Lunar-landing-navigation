@@ -1,0 +1,305 @@
+:root {
+  --bg: #050816;
+  --pn: rgba(16, 28, 60, 0.78);
+  --bd: rgba(120, 180, 255, 0.24);
+  --tx: #eaf1ff;
+  --mu: #a3b3d8;
+  --cy: #31d4ff;
+  --or: #ff9a3c;
+  --ok: #5be3a0;
+  --bad: #ff6b7a;
+  color-scheme: dark;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: radial-gradient(circle at 20% 0, #0e1c4a, var(--bg) 60%);
+  color: var(--tx);
+  font:
+    14px/1.45 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+#app {
+  display: grid;
+  grid-template-columns: 172px minmax(0, 1fr) 370px;
+  min-height: 100vh;
+}
+nav {
+  padding: 12px;
+  border-right: 1px solid var(--bd);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.logo {
+  font-size: 15px;
+  margin-bottom: 8px;
+  color: var(--cy);
+}
+nav button {
+  text-align: left;
+}
+nav button[aria-current="true"] {
+  border-color: var(--cy);
+  background: rgba(49, 212, 255, 0.14);
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--tx);
+  background: rgba(10, 18, 44, 0.85);
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+button {
+  cursor: pointer;
+}
+button:hover {
+  border-color: var(--cy);
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--cy);
+  outline-offset: 2px;
+}
+.pri {
+  background: var(--or);
+  color: #1a0d00;
+  border-color: var(--or);
+  font-weight: 600;
+}
+main {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+#stage {
+  position: relative;
+  height: 64vh;
+  min-height: 340px;
+  border: 1px solid var(--bd);
+  border-radius: 14px;
+  overflow: hidden;
+}
+#cv {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+.ov {
+  position: absolute;
+  background: var(--pn);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.tl {
+  top: 8px;
+  left: 8px;
+}
+.lay {
+  top: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.br {
+  bottom: 8px;
+  left: 8px;
+  color: var(--mu);
+}
+.tl input {
+  width: min(250px, 60vw);
+}
+aside {
+  padding: 10px;
+  border-left: 1px solid var(--bd);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+.pn {
+  background: var(--pn);
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  padding: 12px;
+}
+h2,
+h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+.mu {
+  color: var(--mu);
+}
+.v {
+  display: none;
+}
+.v.on {
+  display: block;
+}
+.bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 2px 0 6px;
+}
+.bar i {
+  display: block;
+  height: 100%;
+}
+.bd {
+  font-size: 11px;
+  border-radius: 99px;
+  padding: 0 7px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+.observed {
+  color: var(--ok);
+}
+.modeled {
+  color: var(--cy);
+}
+.hypothetical {
+  color: var(--or);
+}
+.row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 6px 0;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+td,
+th {
+  padding: 4px 5px;
+  border-bottom: 1px solid var(--bd);
+  text-align: left;
+  vertical-align: top;
+}
+.tbl {
+  overflow-x: auto;
+}
+.tbl a,
+.pn a {
+  color: var(--cy);
+}
+label {
+  font-size: 12px;
+  color: var(--mu);
+}
+input[type="number"] {
+  width: 72px;
+}
+textarea {
+  width: 100%;
+  height: 120px;
+  font-size: 12px;
+}
+.st-PASS,
+.st-MEETS_CONFIGURED_CRITERIA {
+  color: var(--ok);
+}
+.st-WARNING,
+.st-CONDITIONAL {
+  color: var(--or);
+}
+.st-FAIL,
+.st-REJECTED_HARD_CONSTRAINT {
+  color: var(--bad);
+}
+.st-UNKNOWN {
+  color: var(--mu);
+}
+.alert {
+  border: 1px solid var(--bad);
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: var(--bad);
+  margin: 6px 0;
+}
+.okb {
+  border: 1px solid var(--ok);
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: var(--ok);
+  margin: 6px 0;
+}
+.cv2 {
+  width: 100%;
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  background: #0a1228;
+}
+details.t {
+  border-top: 1px solid var(--bd);
+  padding: 6px 0;
+}
+.list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 4px;
+}
+.astronomy-frame {
+  display: block;
+  width: 100%;
+  height: min(78vh, 900px);
+  min-height: 620px;
+  border: 1px solid var(--bd);
+  border-radius: 9px;
+  background: #10131a;
+}
+@media (max-width: 1000px) {
+  #app {
+    grid-template-columns: 1fr;
+  }
+  nav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--bd);
+  }
+  nav button {
+    white-space: nowrap;
+  }
+  .logo {
+    display: none;
+  }
+  aside {
+    border-left: 0;
+    max-height: none;
+    overflow: visible;
+  }
+  #stage {
+    height: 56vh;
+  }
+}

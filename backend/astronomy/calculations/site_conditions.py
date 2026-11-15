@@ -58,3 +58,4 @@ def derive_site_conditions(sun: CelestialResult, earth: CelestialResult) -> dict
             "limitations": "Estimate; TSI variability, local terrain, slopes, and shadows are not modeled.",
         },
     }
+

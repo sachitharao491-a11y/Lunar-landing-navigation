@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Lunar Moon Navigator</title>
+<style>
+:root{--bg:#050816;--pn:rgba(16,28,60,.78);--bd:rgba(120,180,255,.24);--tx:#eaf1ff;--mu:#a3b3d8;--cy:#31d4ff;--or:#ff9a3c;--ok:#5be3a0;--bad:#ff6b7a;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#0e1c4a,var(--bg) 60%);color:var(--tx);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+#app{display:grid;grid-template-columns:172px minmax(0,1fr) 370px;min-height:100vh}
+nav{padding:12px;border-right:1px solid var(--bd);display:flex;flex-direction:column;gap:6px}.logo{font-size:15px;margin-bottom:8px;color:var(--cy)}
+nav button{text-align:left}nav button[aria-current=true]{border-color:var(--cy);background:rgba(49,212,255,.14)}
+button,input,select,textarea{font:inherit;color:var(--tx);background:rgba(10,18,44,.85);border:1px solid var(--bd);border-radius:8px;padding:6px 10px}
+button{cursor:pointer}button:hover{border-color:var(--cy)}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+.pri{background:var(--or);color:#1a0d00;border-color:var(--or);font-weight:600}
+main{padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}#stage{position:relative;height:64vh;min-height:340px;border:1px solid var(--bd);border-radius:14px;overflow:hidden}
+#cv{width:100%;height:100%;display:block;touch-action:none;cursor:grab}.ov{position:absolute;background:var(--pn);backdrop-filter:blur(8px);border:1px solid var(--bd);border-radius:10px;padding:6px 8px;font-size:12px}
+.tl{top:8px;left:8px}.lay{top:8px;right:8px;display:flex;flex-direction:column;gap:2px}.br{bottom:8px;left:8px;color:var(--mu)}.tl input{width:min(250px,60vw)}
+aside{padding:10px;border-left:1px solid var(--bd);display:flex;flex-direction:column;gap:10px;max-height:100vh;overflow-y:auto}
+.pn{background:var(--pn);border:1px solid var(--bd);border-radius:12px;padding:12px}h2,h3{margin:0 0 6px;font-size:15px}.mu{color:var(--mu)}.v{display:none}.v.on{display:block}
+.bar{height:6px;background:rgba(255,255,255,.12);border-radius:4px;overflow:hidden;margin:2px 0 6px}.bar i{display:block;height:100%}
+.bd{font-size:11px;border-radius:99px;padding:0 7px;border:1px solid;white-space:nowrap}.observed{color:var(--ok)}.modeled{color:var(--cy)}.hypothetical{color:var(--or)}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0}table{width:100%;border-collapse:collapse;font-size:12px}td,th{padding:4px 5px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:top}
+.tbl{overflow-x:auto}label{font-size:12px;color:var(--mu)}input[type=number]{width:72px}textarea{width:100%;height:120px;font-size:12px}
+.list button{display:block;width:100%;text-align:left;margin-bottom:4px}
+@media(max-width:1000px){#app{grid-template-columns:1fr}nav{flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--bd)}nav button{white-space:nowrap}.logo{display:none}aside{border-left:0;max-height:none;overflow:visible}#stage{height:56vh}}
+</style></head><body>
+<div id="app">
+<nav id="nav" aria-label="Main"><b class="logo">🌙 Lunar Moon Navigator</b></nav>
+<main><div id="stage"><canvas id="cv" role="img" aria-label="Interactive 3D Moon. Drag to rotate, scroll to zoom."></canvas>
+<div class="ov tl"><input id="q" list="dl" placeholder="Search name or “lat, lon”" aria-label="Search lunar locations"><datalist id="dl"></datalist></div>
+<div class="ov lay"><label><input type="checkbox" id="Lsites" checked> Sites</label><label><input type="checkbox" id="Lpsr" checked> PSR zones</label><label><input type="checkbox" id="Lgrid"> Graticule</label><label><input type="checkbox" id="Lroute" checked> Route</label></div>
+<div class="ov br">Drag: rotate · Scroll/pinch: zoom · Click: select</div><div class="ov" id="moon-model-status" style="right:8px;bottom:8px;left:auto" aria-live="polite">Loading NASA LRO 3D model…</div></div>
+<div class="pn mu" id="status" aria-live="polite"></div></main>
+<aside><div class="pn" id="info"></div>
+<section class="v pn" id="v-dash"><h2>Mission dashboard</h2><div id="dash"></div></section>
+<section class="v pn" id="v-explore"><h2>3D Moon explorer</h2><p class="mu">All sample locations. ★ marks favorites.</p><div class="list" id="sitelist"></div></section>
+<section class="v pn" id="v-south"><h2>Lunar south pole</h2><p class="mu">Cyan discs on the globe are approximate PSR zones (permanently shadowed regions). Each ice indicator carries its evidence class.</p><div class="row"><button class="pri" data-a="pole">Fly to the pole</button></div><div id="south"></div></section>
+<section class="v pn" id="v-analysis"><h2>Landing site analysis</h2><p class="mu">Weights (0–10). Scores are a simulated educational model, <b>not an official NASA recommendation</b>.</p><div id="wts"></div><div id="rank"></div><div class="tbl" id="cmp"></div></section>
+<section class="v pn" id="v-plan"><h2>Mission planner</h2>
+<p class="mu">1) Set a landing site (select a site, then “Set as landing site”). 2) Turn on click mode and click the Moon to add waypoints.</p>
+<div class="row"><button id="pmode" data-a="pmode">Click-to-add: off</button><button data-a="rover" class="pri">▶ Run rover</button><button data-a="clr">Clear route</button></div>
+<div class="row"><label>Speed km/h <input type="number" id="pl-speed" value="1" min=".1" step=".1"></label><label>Op. h/day <input type="number" id="pl-hrs" value="8" min="1" max="24"></label><label>Margin % <input type="number" id="pl-margin" value="20" min="0"></label><label>Hours/stop <input type="number" id="pl-stop" value="4" min="0"></label></div>
+<div id="plan"></div>
+<div class="row"><input id="pl-name" placeholder="Plan name" aria-label="Plan name"><button data-a="save">Save plan</button><button data-a="report">Generate report</button></div>
+<textarea id="rep" hidden readonly aria-label="Mission report"></textarea><button id="cp" data-a="copy" hidden>Copy report</button><h3 style="margin-top:10px">Saved plans</h3><div id="saved"></div></section>
+<section class="v pn" id="v-data"><h2>Scientific data</h2><div class="tbl" id="ds"></div><div class="row"><button data-a="api" class="pri">Test NASA API connection</button></div><div id="apistat" class="mu"></div>
+<p class="mu"><span class="bd observed">observed</span> measured by a mission · <span class="bd modeled">modeled</span> derived from models of observations · <span class="bd hypothetical">hypothetical</span> predicted, unconfirmed.</p></section>
+<section class="v pn" id="v-about"><h2>About</h2><p>Lunar Moon Navigator is an educational demo for exploring lunar sites, comparing landing candidates and sketching rover routes.</p><p class="mu">The interactive globe uses NASA Goddard's LRO imagery and topography model. Site values remain illustrative samples, not live NASA recommendations. Model: <a href="https://svs.gsfc.nasa.gov/14959/" target="_blank" rel="noopener">NASA SVS Moon 3D Models</a>. Backend, database, accounts and PDF export are not part of this single-page build; reports are plain text. Distances use a sphere of radius 1,737.4 km.</p></section>
+</aside></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+const $=i=>document.getElementById(i),D=Math.PI/180,RM=1737.4,esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const SITES=[["Shackleton Crater rim","landing",-89.9,0,1.5,8,80,55,70,"modeled",55,95,"Rim ridges get near-continuous sunlight; the interior is a cold-trap PSR."],
+["Connecting Ridge","landing",-89.4,-137.5,1.8,6,90,50,60,"modeled",45,85,"Ridge linking Shackleton and de Gerlache; a leading candidate area."],
+["Haworth Crater rim","landing",-87.5,-5,.5,9,60,50,70,"modeled",70,85,"Large PSR crater with rugged rim terrain."],
+["Faustini Crater rim","landing",-87.3,77,.3,7,55,45,65,"modeled",65,80,"Deep PSR crater with possible volatiles."],
+["de Gerlache Crater rim","landing",-88.5,-87,.8,8,65,40,60,"modeled",60,80,"Crater with PSR floor near the pole."],
+["Malapert Massif","landing",-86,0,5,5,75,95,40,"hypothetical",40,70,"Massif with a near-constant line of sight to Earth."],
+["Cabeus Crater","psr",-84.9,-35.5,-1,10,10,35,85,"observed",65,100,"NASA’s LCROSS impact (2009) detected water in the ejecta plume."],
+["Nobile Crater rim","landing",-85.3,53,.6,7,60,40,55,"hypothetical",50,75,"Candidate region near the pole."],
+["Apollo 11 (Tranquility Base)","landmark",.67,23.47,-2,3,50,95,0,"observed",20,80,"First crewed landing, July 1969."],
+["Apollo 17 (Taurus–Littrow)","landmark",20.19,30.77,-2.5,6,50,90,0,"observed",35,75,"Last Apollo mission, December 1972."],
+["Tycho Crater","landmark",-43.3,-11.4,0,15,50,90,0,"hypothetical",75,70,"Young, bright-rayed impact crater."],
+["Copernicus Crater","landmark",9.7,-20.1,0,14,50,90,0,"hypothetical",60,70,"Large crater with terraced walls and central peaks."],
+["Aristarchus Plateau","landmark",23.7,-47.4,0,8,50,85,0,"hypothetical",55,80,"Volcanic plateau with very bright terrain."]]
+.map((a,i)=>({id:i,n:a[0],k:a[1],lat:a[2],lon:a[3],el:a[4],sl:a[5],sun:a[6],com:a[7],ice:a[8],ip:a[9],haz:a[10],sci:a[11],note:a[12]}));
+const W={sl:5,sun:5,com:4,ice:4,haz:5,sci:3},WL={sl:"Gentle slope",sun:"Sunlight",com:"Earth visibility",ice:"Water-ice potential",haz:"Low hazard",sci:"Science value"};
+let S={sel:null,favs:[],cmp:[],mode:false,tour:-1},P={start:null,wps:[],speed:1,hrs:8,margin:20,stop:4},SAVED=[],view="dash";
+try{const j=JSON.parse(localStorage.getItem("lmn")||"{}");S.favs=j.favs||[];SAVED=j.plans||[]}catch(e){}
+const persist=()=>{try{localStorage.setItem("lmn",JSON.stringify({favs:S.favs,plans:SAVED}))}catch(e){}};
+const score=s=>{const c={sl:Math.max(0,100-s.sl*8),sun:s.sun,com:s.com,ice:s.ice,haz:100-s.haz,sci:s.sci};let t=0,w=0;for(const k in W){t+=c[k]*W[k];w+=W[k]}return{c,v:w?Math.round(t/w):0}};
+const risk=s=>s.haz>=65||s.sl>=10?"High":s.haz>=45?"Moderate":"Low";
+const fmt=(la,lo)=>`${Math.abs(la).toFixed(2)}°${la<0?"S":"N"}, ${Math.abs(lo).toFixed(2)}°${lo<0?"W":"E"}`;
+const bar=(v,c="var(--cy)")=>`<div class="bar"><i style="width:${Math.max(0,Math.min(100,v))}%;background:${c}"></i></div>`;
+const badge=p=>`<span class="bd ${p}">${p}</span>`;
+const ll=(la,lo,r=1)=>{const p=(lo+180)*D,t=(90-la)*D;return new THREE.Vector3(-r*Math.cos(p)*Math.sin(t),r*Math.cos(t),r*Math.sin(p)*Math.sin(t))};
+const v2ll=v=>{v=v.clone().normalize();let lo=Math.atan2(v.z,-v.x)/D-180;if(lo<-180)lo+=360;return[Math.asin(v.y)/D,lo]};
+const dist=(a,b)=>RM*Math.acos(Math.max(-1,Math.min(1,ll(a.lat,a.lon).dot(ll(b.lat,b.lon)))));
+const ang=(a,b,c,d)=>Math.acos(Math.max(-1,Math.min(1,ll(a,b).dot(ll(c,d)))))/D;
+// ---------- 3D ----------
+let ren,sc,cam,G,moon,gSites,gPsr,gGrid,gRoute,cursor,rover,tgtQ=null,tgtZ=null,path=[],rv=-1;
+function tex(){const c=document.createElement("canvas");c.width=1024;c.height=512;const x=c.getContext("2d"),X=l=>(l+180)/360*1024,Y=l=>(90-l)/180*512;x.fillStyle="#8c8c8c";x.fillRect(0,0,1024,512);let r=7;const q=()=>(r=r*16807%2147483647)/2147483647;
+for(let i=0;i<900;i++){const g=x.createRadialGradient(q()*1024,q()*512,0,0,0,1);x.fillStyle=`rgba(${q()>.5?255:60},${q()>.5?255:60},${q()>.5?255:60},.05)`;x.beginPath();x.arc(q()*1024,q()*512,6+q()*30,0,7);x.fill()}
+[[32,-16,18],[28,18,9],[8,31,10],[17,59,6],[-21,-16,8],[18,-57,20],[-4,52,8],[-24,-39,6]].forEach(m=>{x.fillStyle="rgba(40,42,52,.55)";x.beginPath();x.ellipse(X(m[1]),Y(m[0]),m[2]/360*1024,m[2]/180*512*1.1,0,0,7);x.fill()});
+for(let i=0;i<900;i++){const px=q()*1024,py=q()*512,s=1+q()*q()*9;x.strokeStyle="rgba(235,235,235,.35)";x.fillStyle="rgba(50,50,50,.25)";x.beginPath();x.arc(px,py,s,0,7);x.fill();x.stroke()}
+return new THREE.CanvasTexture(c)}
+function init(){try{ren=new THREE.WebGLRenderer({canvas:$("cv"),antialias:true})}catch(e){$("stage").insertAdjacentHTML("beforeend",'<div class="ov" style="top:50%;left:20%">3D is unavailable in this browser (WebGL error). The panels still work.</div>');return false}
+sc=new THREE.Scene();cam=new THREE.PerspectiveCamera(40,1,.1,100);cam.position.z=3.6;G=new THREE.Group();sc.add(G);
+moon=new THREE.Mesh(new THREE.SphereGeometry(1,64,48),new THREE.MeshLambertMaterial({map:tex()}));G.add(moon);
+if(THREE.GLTFLoader){const modelUrl=location.pathname.startsWith('/standalone-demo/')?'../frontend/assets/moon.glb':'assets/moon.glb';new THREE.GLTFLoader().load(modelUrl,gltf=>{const model=gltf.scene;model.updateMatrixWorld(true);const bounds=new THREE.Box3().setFromObject(model),center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3()),scale=2/Math.max(size.x,size.y,size.z);model.scale.setScalar(scale);model.position.set(-center.x*scale,-center.y*scale,-center.z*scale);G.remove(moon);moon=model;G.add(moon);const badge=document.getElementById('moon-model-status');if(badge)badge.textContent='NASA LRO 3D model loaded';},undefined,e=>{console.warn('NASA Moon model could not be loaded; using the illustrative fallback.',e);const badge=document.getElementById('moon-model-status');if(badge)badge.textContent='NASA model unavailable · illustrative fallback'});}
+sc.add(new THREE.AmbientLight(0xffffff,.55));const dl=new THREE.DirectionalLight(0xffffff,.95);dl.position.set(-3,1.5,4);sc.add(dl);
+const sp=[];for(let i=0;i<900;i++){const v=new THREE.Vector3(Math.random()-.5,Math.random()-.5,Math.random()-.5).normalize().multiplyScalar(40);sp.push(v.x,v.y,v.z)}
+const sg=new THREE.BufferGeometry();sg.setAttribute("position",new THREE.Float32BufferAttribute(sp,3));sc.add(new THREE.Points(sg,new THREE.PointsMaterial({size:.12,color:0xffffff})));
+gSites=new THREE.Group();gPsr=new THREE.Group();gGrid=new THREE.Group();gRoute=new THREE.Group();gGrid.visible=false;G.add(gSites,gPsr,gGrid,gRoute);
+const up=new THREE.Vector3(0,0,1);
+SITES.forEach(s=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.02,12,8),new THREE.MeshBasicMaterial({color:s.k=="landing"?0xff9a3c:s.k=="psr"?0x31d4ff:0xffffff}));m.position.copy(ll(s.lat,s.lon,1.012));gSites.add(m);
+if(/Shackleton|Haworth|Faustini|Gerlache|Cabeus/.test(s.n)){const d=new THREE.Mesh(new THREE.CircleGeometry(.05,24),new THREE.MeshBasicMaterial({color:0x31d4ff,transparent:true,opacity:.35,side:THREE.DoubleSide}));d.position.copy(ll(s.lat,s.lon,1.003));d.quaternion.setFromUnitVectors(up,d.position.clone().normalize());gPsr.add(d)}});
+const pts=[];for(let la=-60;la<=60;la+=30)for(let lo=-180;lo<180;lo+=5)pts.push(ll(la,lo,1.002),ll(la,lo+5,1.002));for(let lo=-180;lo<180;lo+=30)for(let la=-85;la<85;la+=5)pts.push(ll(la,lo,1.002),ll(la+5,lo,1.002));
+gGrid.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:0x31d4ff,transparent:true,opacity:.35})));
+cursor=new THREE.Mesh(new THREE.RingGeometry(.035,.05,28),new THREE.MeshBasicMaterial({color:0x31d4ff,side:THREE.DoubleSide}));cursor.visible=false;G.add(cursor);
+rover=new THREE.Mesh(new THREE.SphereGeometry(.018,10,8),new THREE.MeshBasicMaterial({color:0x5be3a0}));rover.visible=false;G.add(rover);
+focus(0,0,3.6);G.quaternion.copy(tgtQ);tgtQ=null;
+const cv=$("cv"),Pm=new Map();let md=0,pd=0;
+cv.onpointerdown=e=>{cv.setPointerCapture(e.pointerId);Pm.set(e.pointerId,[e.clientX,e.clientY]);md=0;tgtQ=null};
+cv.onpointermove=e=>{const p=Pm.get(e.pointerId);if(!p)return;if(Pm.size==2){const o=[...Pm.entries()].find(a=>a[0]!=e.pointerId)[1],d=Math.hypot(e.clientX-o[0],e.clientY-o[1]);if(pd)cam.position.z=Math.max(1.5,Math.min(6,cam.position.z+(pd-d)*.01));pd=d}else{const dx=e.clientX-p[0],dy=e.clientY-p[1],k=.0045*cam.position.z/3.6;md+=Math.abs(dx)+Math.abs(dy);G.quaternion.premultiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(dy*k,dx*k,0)))}p[0]=e.clientX;p[1]=e.clientY};
+cv.onpointerup=e=>{Pm.delete(e.pointerId);pd=0;if(md<6&&!Pm.size)pick(e)};cv.onpointercancel=e=>Pm.delete(e.pointerId);
+cv.onwheel=e=>{e.preventDefault();cam.position.z=Math.max(1.5,Math.min(6,cam.position.z+e.deltaY*.002))};
+const loop=()=>{const w=$("stage").clientWidth,h=$("stage").clientHeight;if(cv.width!=w*devicePixelRatio){ren.setPixelRatio(devicePixelRatio);ren.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
+if(tgtQ){G.quaternion.slerp(tgtQ,.09);if(G.quaternion.angleTo(tgtQ)<.002)tgtQ=null}if(tgtZ){cam.position.z+=(tgtZ-cam.position.z)*.09;if(Math.abs(tgtZ-cam.position.z)<.01)tgtZ=null}
+if(rv>=0&&path.length>1){rv+=.004;if(rv>=1){rv=-1;rover.visible=false}else{const f=rv*(path.length-1),i=Math.floor(f);rover.position.lerpVectors(path[i],path[Math.min(i+1,path.length-1)],f-i)}}
+ren.render(sc,cam);requestAnimationFrame(loop)};loop();return true}
+function focus(la,lo,z){tgtQ=new THREE.Quaternion().setFromUnitVectors(ll(la,lo),new THREE.Vector3(0,0,1));if(z)tgtZ=z}
+function pick(e){const r=$("cv").getBoundingClientRect(),rc=new THREE.Raycaster();rc.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),cam);const h=rc.intersectObject(moon,true)[0];if(!h)return;
+const[la,lo]=v2ll(G.worldToLocal(h.point.clone()));let b=null,bd=3.2*cam.position.z/3.6;SITES.forEach(s=>{const d=ang(la,lo,s.lat,s.lon);if(d<bd){bd=d;b=s}});
+if(S.mode)addWp(b?{lat:b.lat,lon:b.lon,n:b.n}:{lat:la,lon:lo,n:"Waypoint"});else b?select(b.id):select({lat:la,lon:lo})}
+// ---------- state / render ----------
+function select(x,fly){S.sel=x;const p=typeof x=="number"?SITES[x]:x;if(cursor){cursor.visible=true;cursor.position.copy(ll(p.lat,p.lon,1.015));cursor.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),cursor.position.clone().normalize())}if(fly&&G)focus(p.lat,p.lon,2.6);renderAll()}
+function addWp(w){P.wps.push(w);renderAll()}
+function rInfo(){const x=S.sel,el=$("info");if(x==null){el.innerHTML="<h3>No location selected</h3><p class='mu'>Click the Moon, search, or pick a site to open its intelligence card.</p>";return}
+if(typeof x=="object"){el.innerHTML=`<h3>Custom location</h3><p>${fmt(x.lat,x.lon)}</p><p class="mu">No sample data for this point. Terrain, sunlight and ice values are not available here.</p><div class="row"><button data-a="wpc">Add as waypoint</button></div>`;return}
+const s=SITES[x],sc2=score(s),r=risk(s),pros=Object.keys(W).filter(k=>sc2.c[k]>=70).map(k=>WL[k]),cons=Object.keys(W).filter(k=>sc2.c[k]<=40).map(k=>WL[k]);
+const t=s.sun<20?"≈ −170 °C or colder (permanently shadowed, modeled)":s.lat<-80?"≈ −190 to −50 °C over a lunar day (modeled, typical)":"≈ −170 to +120 °C over a lunar day (typical)";
+el.innerHTML=`<h3>${S.favs.includes(x)?"★ ":""}${s.n}</h3><p class="mu">${fmt(s.lat,s.lon)} · ${s.k}</p><p>${s.note}</p>
+<table><tr><td>Elevation (sample)</td><td>≈ ${s.el} km</td></tr><tr><td>Slope (sample)</td><td>≈ ${s.sl}°</td></tr><tr><td>Sunlight exposure</td><td>${s.sun}% ${badge("modeled")}</td></tr><tr><td>Temperature</td><td>${t}</td></tr><tr><td>Water-ice potential</td><td>${s.ice}/100 ${badge(s.ip)}</td></tr></table>
+<h3 style="margin-top:8px">Suitability ${sc2.v}/100 · Risk: <span style="color:${r=="High"?"var(--bad)":r=="Low"?"var(--ok)":"var(--or)"}">${r}</span></h3>${bar(sc2.v,"var(--or)")}
+<p><b>Pros:</b> ${pros.join(", ")||"none strong"}<br><b>Cons:</b> ${cons.join(", ")||"none major"}</p>
+<p class="mu">Why: weighted blend of slope, sunlight, comms, ice, hazard and science value. Simulated; not an official NASA recommendation.</p>
+<div class="row"><button data-a="fav">${S.favs.includes(x)?"Unfavorite":"★ Favorite"}</button><button data-a="land" class="pri">Set as landing site</button><button data-a="wps">Add waypoint</button><button data-a="cmp" data-i="${x}">Compare</button></div>`}
+function rDash(){const ranked=SITES.slice().sort((a,b)=>score(b).v-score(a).v).slice(0,3),L=pl();
+$("dash").innerHTML=`<h3>Mission status</h3><table><tr><td>Landing site</td><td>${P.start!=null?SITES[P.start].n:"not set"}</td></tr><tr><td>Waypoints</td><td>${P.wps.length}</td></tr><tr><td>Route / duration</td><td>${L.km.toFixed(1)} km · ${L.days.toFixed(1)} days</td></tr><tr><td>NASA data</td><td>Sample data (offline) ${badge("modeled")}</td></tr></table>
+<h3 style="margin-top:8px">Top simulated sites</h3>${ranked.map(s=>`<button data-a="sel" data-i="${s.id}" style="display:block;width:100%;text-align:left;margin-bottom:4px">${s.n} — ${score(s).v}</button>`).join("")}
+<h3 style="margin-top:8px">Guided tour</h3><div id="tour"></div>`;rTour()}
+const TOUR=[[8,"Start with Apollo 11: humanity’s first landing was at a low-latitude, smooth, well-lit mare."],[5,"Malapert Massif: a tall peak near the pole that keeps Earth in view for direct communication."],[0,"Shackleton’s rim: sunlight for power, next to a shadowed crater that may trap ice."],[6,"Cabeus: where NASA’s LCROSS mission detected water in 2009."],[1,"Connecting Ridge: a ridge with high sunlight that links two polar craters."]];
+function rTour(){const t=$("tour");if(!t)return;t.innerHTML=S.tour<0?'<button data-a="tour" data-i="0" class="pri">Start tour</button>':`<p>${S.tour+1}/${TOUR.length}: ${TOUR[S.tour][1]}</p><div class="row"><button data-a="tour" data-i="${S.tour-1}" ${S.tour?"":"disabled"}>Back</button><button data-a="tour" data-i="${S.tour+1}">${S.tour==TOUR.length-1?"Finish":"Next"}</button></div>`}
+function rExplore(){$("sitelist").innerHTML=SITES.map(s=>`<button data-a="sel" data-i="${s.id}">${S.favs.includes(s.id)?"★ ":""}${s.n}<br><span class="mu">${fmt(s.lat,s.lon)}</span></button>`).join("")}
+function rSouth(){$("south").innerHTML=SITES.filter(s=>s.lat<-80).map(s=>`<div style="margin-top:8px"><b>${s.n}</b> ${badge(s.ip)}<br><span class="mu">Water-ice potential</span>${bar(s.ice,"var(--cy)")}<span class="mu">Sunlight</span>${bar(s.sun,"var(--or)")}<span class="mu">Terrain hazard</span>${bar(s.haz,"var(--bad)")}</div>`).join("")+'<p class="mu">Habitat candidates: high-sun, low-slope, low-hazard rims near ice (hypothetical).</p>'}
+function rWts(){$("wts").innerHTML=Object.keys(W).map(k=>`<label>${WL[k]} <b id="wv-${k}">${W[k]}</b><input type="range" min="0" max="10" value="${W[k]}" data-w="${k}" style="width:100%"></label>`).join("")}
+function rRank(){const r=SITES.slice().sort((a,b)=>score(b).v-score(a).v);$("rank").innerHTML="<h3 style='margin-top:8px'>Ranking</h3>"+r.map((s,i)=>`<div class="row" style="margin:2px 0"><input type="checkbox" data-a="cmp" data-i="${s.id}" ${S.cmp.includes(s.id)?"checked":""} aria-label="Compare ${s.n}"><button data-a="sel" data-i="${s.id}" style="flex:1;text-align:left">${i+1}. ${s.n} <b>${score(s).v}</b> · ${risk(s)}</button></div>`).join("");
+const c=S.cmp.map(i=>SITES[i]);$("cmp").innerHTML=c.length<2?'<p class="mu">Tick 2–3 sites to compare them.</p>':`<table><tr><th></th>${c.map(s=>`<th>${s.n.split(" ")[0]}</th>`).join("")}</tr>${Object.keys(W).map(k=>`<tr><td>${WL[k]}</td>${c.map(s=>`<td>${Math.round(score(s).c[k])}</td>`).join("")}</tr>`).join("")}<tr><td><b>Score</b></td>${c.map(s=>`<td><b>${score(s).v}</b></td>`).join("")}</tr><tr><td>Risk</td>${c.map(s=>`<td>${risk(s)}</td>`).join("")}</tr></table>`}
+function pl(){const pts=(P.start!=null?[SITES[P.start]]:[]).concat(P.wps),legs=[];let km=0;for(let i=1;i<pts.length;i++){const d=dist(pts[i-1],pts[i]);legs.push([pts[i-1].n,pts[i].n,d]);km+=d}
+const dh=km/P.speed*(1+P.margin/100),tot=dh+P.wps.length*P.stop;return{pts,legs,km,dh,tot,days:tot/P.hrs}}
+function rPlan(){const L=pl();$("plan").innerHTML=P.start==null?'<p class="mu">No landing site yet. Select a site and press “Set as landing site”.</p>':`<table><tr><td>Start</td><td>${esc(SITES[P.start].n)}</td></tr>${L.legs.map((l,i)=>`<tr><td>${esc(l[1])}</td><td>${l[2].toFixed(1)} km <button data-a="rm" data-i="${i}" aria-label="Remove waypoint">✕</button></td></tr>`).join("")}</table>${L.legs.length?"":'<p class="mu">Add waypoints to build a route.</p>'}<p><b>${L.km.toFixed(1)} km</b> · driving ${L.dh.toFixed(0)} h · total ${L.tot.toFixed(0)} h · <b>≈ ${L.days.toFixed(1)} days</b> at ${P.hrs} h/day</p>`;drawRoute(L);
+$("pmode").textContent="Click-to-add: "+(S.mode?"ON":"off");$("saved").innerHTML=SAVED.length?SAVED.map((p,i)=>`<div class="row"><span style="flex:1">${esc(p.name)} <span class="mu">${p.km.toFixed(0)} km</span></span><button data-a="load" data-i="${i}">Load</button><button data-a="del" data-i="${i}">Delete</button></div>`).join(""):'<p class="mu">No saved plans yet.</p>'}
+function drawRoute(L){if(!gRoute)return;while(gRoute.children.length)gRoute.remove(gRoute.children[0]);path=[];const pts=L.pts;pts.forEach((p,i)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.016,10,8),new THREE.MeshBasicMaterial({color:i?0x31d4ff:0x5be3a0}));m.position.copy(ll(p.lat,p.lon,1.01));gRoute.add(m)});
+for(let i=1;i<pts.length;i++){const a=ll(pts[i-1].lat,pts[i-1].lon),b=ll(pts[i].lat,pts[i].lon),an=Math.acos(Math.max(-1,Math.min(1,a.dot(b)))),n=Math.max(2,Math.ceil(an/D*2));for(let k=0;k<=n;k++){const t=k/n,v=an<1e-6?a.clone():a.clone().multiplyScalar(Math.sin((1-t)*an)).add(b.clone().multiplyScalar(Math.sin(t*an))).multiplyScalar(1/Math.sin(an));path.push(v.multiplyScalar(1.008))}}
+if(path.length>1)gRoute.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(path),new THREE.LineBasicMaterial({color:0xff9a3c})))}
+const DS=[["NASA PDS Geosciences Node","Archive for LRO and other lunar mission products"],["LRO / LOLA","Laser altimeter: elevation and slope"],["LRO / Diviner","Radiometer: surface temperatures, cold traps"],["NASA Moon Trek (trek.nasa.gov/moon)","Web portal for lunar map layers"],["NASA Open APIs (api.nasa.gov)","Public APIs for images and mission data"]];
+function rData(){$("ds").innerHTML=`<table><tr><th>Source</th><th>Use</th><th>Status</th></tr>${DS.map(d=>`<tr><td>${d[0]}</td><td>${d[1]}</td><td>Not connected here; sample data used</td></tr>`).join("")}</table><p class="mu">Sample values date: 2026 build, approximate, hand-entered from published descriptions.</p>`}
+function report(){const L=pl();return`LUNAR MOON NAVIGATOR: MISSION REPORT (simulated, educational)\nLanding site: ${P.start!=null?SITES[P.start].n:"not set"}\n`+L.legs.map((l,i)=>`Leg ${i+1}: ${l[0]} -> ${l[1]}: ${l[2].toFixed(1)} km`).join("\n")+`\nTotal distance: ${L.km.toFixed(1)} km\nAssumptions: ${P.speed} km/h, ${P.hrs} operating h/day, ${P.margin}% margin, ${P.stop} h per stop\nEstimated duration: ${L.days.toFixed(1)} days (${L.tot.toFixed(0)} h)\nData: illustrative sample values, not NASA data; not an official recommendation.`}
+function renderAll(){rInfo();rDash();rExplore();rSouth();rRank();rPlan();$("status").textContent=S.mode?"Click-to-add is ON: click the Moon to add route waypoints.":S.sel==null?"Select a location to begin.":"Selected: "+(typeof S.sel=="number"?SITES[S.sel].n:fmt(S.sel.lat,S.sel.lon))}
+// ---------- events ----------
+const NAV=[["dash","Mission Dashboard"],["explore","3D Moon Explorer"],["south","Lunar South Pole"],["analysis","Landing Site Analysis"],["plan","Mission Planner"],["data","Scientific Data"],["about","About the Project"]];
+NAV.forEach(n=>$("nav").insertAdjacentHTML("beforeend",`<button data-a="nav" data-i="${n[0]}">${n[1]}</button>`));
+function setView(v){view=v;document.querySelectorAll(".v").forEach(e=>e.classList.toggle("on",e.id=="v-"+v));document.querySelectorAll("#nav button").forEach(b=>b.setAttribute("aria-current",b.dataset.i==v));if(v=="south"&&G){focus(-90,0,2.4)}}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-a]");if(!b||b.tagName=="INPUT"&&b.type!="checkbox")return;const a=b.dataset.a,i=b.dataset.i;
+if(a=="nav")setView(i);else if(a=="sel")select(+i,true);else if(a=="fav"){const k=S.favs.indexOf(S.sel);k<0?S.favs.push(S.sel):S.favs.splice(k,1);persist();renderAll()}
+else if(a=="land"){P.start=S.sel;P.wps=[];renderAll()}else if(a=="wps"){const s=SITES[S.sel];addWp({lat:s.lat,lon:s.lon,n:s.n})}else if(a=="wpc")addWp({lat:S.sel.lat,lon:S.sel.lon,n:"Waypoint"});
+else if(a=="cmp"){const k=S.cmp.indexOf(+i);if(k>=0)S.cmp.splice(k,1);else{if(S.cmp.length>=3)S.cmp.shift();S.cmp.push(+i)}renderAll()}
+else if(a=="pole"&&G)focus(-90,0,2.4);else if(a=="pmode"){S.mode=!S.mode;renderAll()}else if(a=="clr"){P.wps=[];renderAll()}else if(a=="rm"){P.wps.splice(+i,1);renderAll()}
+else if(a=="rover"){if(path.length>1&&rover){rover.visible=true;rv=0}else $("status").textContent="Build a route first (landing site plus at least one waypoint)."}
+else if(a=="save"){const L=pl();if(P.start==null||!L.legs.length){$("status").textContent="Add a landing site and at least one waypoint before saving.";return}SAVED.push({name:$("pl-name").value||"Plan "+(SAVED.length+1),P:JSON.parse(JSON.stringify(P)),km:L.km});persist();renderAll()}
+else if(a=="load"){P=Object.assign({},SAVED[+i].P);["speed","hrs","margin","stop"].forEach(k=>$("pl-"+k).value=P[k]);renderAll()}else if(a=="del"){SAVED.splice(+i,1);persist();renderAll()}
+else if(a=="report"){$("rep").hidden=false;$("cp").hidden=false;$("rep").value=report()}
+else if(a=="copy"){try{navigator.clipboard.writeText($("rep").value).then(()=>$("status").textContent="Report copied.",()=>{$("rep").select();$("status").textContent="Select and copy the text manually."})}catch(x){$("rep").select()}}
+else if(a=="tour"){S.tour=+i>=TOUR.length?-1:+i;if(S.tour>=0)select(TOUR[S.tour][0],true);else rTour()}
+else if(a=="api"){$("apistat").textContent="Contacting NASA…";const c=new AbortController(),t=setTimeout(()=>c.abort(),5000);fetch("https://images-api.nasa.gov/search?q=lunar%20south%20pole&media_type=image",{signal:c.signal}).then(r=>r.json()).then(j=>$("apistat").textContent="Live: "+j.collection.items.length+" results.").catch(()=>$("apistat").textContent="NASA API unreachable from this page (network policy or offline). Using clearly labeled sample data.").finally(()=>clearTimeout(t))}});
+$("wts").addEventListener("input",e=>{const k=e.target.dataset.w;if(k){W[k]=+e.target.value;$("wv-"+k).textContent=W[k];rRank();rDash();rInfo()}});
+["speed","hrs","margin","stop"].forEach(k=>$("pl-"+k).oninput=e=>{P[k]=Math.max(k=="speed"?.1:0,+e.target.value||0)||P[k];rPlan();rDash()});
+$("dl").innerHTML=SITES.map(s=>`<option value="${s.n}">`).join("");
+$("q").onkeydown=e=>{if(e.key!="Enter")return;const v=e.target.value.trim(),m=v.match(/^(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)$/);if(m){const la=+m[1],lo=+m[2];if(Math.abs(la)<=90&&Math.abs(lo)<=180){select({lat:la,lon:lo},true);return}}
+const s=SITES.find(s=>s.n.toLowerCase().includes(v.toLowerCase()));s&&v?select(s.id,true):$("status").textContent="No match for “"+v+"”. Try a site name or “lat, lon”."};
+[["Lsites",()=>gSites],["Lpsr",()=>gPsr],["Lgrid",()=>gGrid],["Lroute",()=>gRoute]].forEach(([id,g])=>$(id).onchange=e=>{if(g())g().visible=e.target.checked});
+init();rWts();rData();setView("dash");renderAll();
+</script></body></html>
